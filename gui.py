@@ -77,7 +77,7 @@ class Application(object):
             filePath = self.clipInfo.getFilePath()
             try:
                 ffmpegReturn = subprocess.check_call(
-                    ['ffmpeg', '-ss', ptsTime, '-y', '-i', filePath, '-vframes', '1', '-vf',
+                    ['bin/ffmpeg', '-ss', ptsTime, '-y', '-i', filePath, '-vframes', '1', '-vf',
                      'scale=-1:min(120\, iw)', 'pvIn.gif'])
                 if ffmpegReturn != 0:
                     tkMessageBox.showwarning("Error", FFmpeg_Preview_Error, icon=tkMessageBox.ERROR, parent=top)
@@ -113,7 +113,7 @@ class Application(object):
             filePath = self.clipInfo.getFilePath()
             try:
                 ffmpegReturn = subprocess.check_call(
-                    ['ffmpeg', '-ss', ptsTime, '-y', '-i', filePath, '-vframes', '1', '-vf',
+                    ['bin/ffmpeg', '-ss', ptsTime, '-y', '-i', filePath, '-vframes', '1', '-vf',
                      'scale=-1:min(120\, iw)', 'pvOut.gif'])
                 if ffmpegReturn != 0:
                     tkMessageBox.showwarning("Error", FFmpeg_Preview_Error, icon=tkMessageBox.ERROR, parent=top)
@@ -142,6 +142,9 @@ class Application(object):
                 logger.error("ffmpeg render OutPoint frame failed! ptsTime = %s" % ptsTime)
             pass
 
+        def previewVideo():
+            pass
+
         def trimVideo():
             answer = tkMessageBox.askyesno("Confirm?", Trim_ConfirmMsg, icon=tkMessageBox.QUESTION, parent=top)
             if answer:
@@ -158,7 +161,7 @@ class Application(object):
                 )
                 logger.info("File saved path = %s" % videoClip)
                 ffmpegReturn = subprocess.check_call(
-                    ['ffmpeg', '-ss', str(inPoint), '-y', '-i', self.clipInfo.getFilePath(), '-t', str(outPoint-inPoint),
+                    ['bin/ffmpeg', '-ss', str(inPoint), '-y', '-i', self.clipInfo.getFilePath(), '-t', str(outPoint-inPoint),
                      '-c', 'copy', videoClip])
                 if ffmpegReturn == 0:
                     self.clipProgress.stop()
@@ -227,7 +230,9 @@ class Application(object):
         thirdRightFrame.pack(side=LEFT)
         self.clipProgress = ttk.Progressbar(thirdMiddleFrame,  orient=HORIZONTAL, length=320, mode='indeterminate')
         self.clipProgress.pack()
-        ttk.Button(thirdRightFrame, text="Trim Video", command=lambda: trimVideo()).pack()
+        ttk.Button(thirdRightFrame, text="Preview", command=lambda: previewVideo()).pack()
+        Label(thirdRightFrame, text="", font=("Arial", 6), fg=gui_White, bg=gui_Dark, pady=0).pack()
+        ttk.Button(thirdRightFrame, text="Trim", command=lambda: trimVideo()).pack()
         # register top as Tkdnd drag zone
         self.dnd.bindtarget(mainFrame, self.videoHandler, 'text/uri-list')
         pass
@@ -236,10 +241,7 @@ class Application(object):
         # get file path and file extension
         logging.info('video = %s' % event.data)
         path = event.data
-        # first parsing to see if there's any bracket in the path
-        if "{" in path:
-            tkMessageBox.showwarning("Error", ContainSpace_Error, icon=tkMessageBox.ERROR, parent=top)
-            return
+        path = path.translate(None, '{}')  # remove {} from path
         filePath = os.path.abspath(path)
         fileExtension = os.path.splitext(filePath)[1]
         logging.debug('filePath = %s', filePath)
@@ -250,7 +252,7 @@ class Application(object):
         if fileExtension in VIDEO_EXTENTIOM_LIST:
             if self.process is None:
                 self.process = subprocess.Popen(
-                    ['ffplay', '-x', FFPLAY_WIDTH, '-y', FFPLAY_HEIGHT, filePath],
+                    ['bin/ffplay', '-x', FFPLAY_WIDTH, '-y', FFPLAY_HEIGHT, filePath],
                     stderr=subprocess.PIPE)
                 self.thread = threading.Thread(target=self.readlines, args=(self.process, self.queues.stderrQueue))
                 self.thread.setDaemon(True)
