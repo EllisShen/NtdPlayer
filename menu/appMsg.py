@@ -11,6 +11,7 @@ VideoFormat_Error = "Video format is incorrect.\nPlease select correct video for
 FileExtension_Error = "File extension is wrong.\nOnly mov file is accepted."
 FFmpeg_Preview_Error = "Rendering Preview Image Fail!"
 FFPLAY_Still_Running = "Another video file is still running! Please close it."
+Trim_TimingErrorMsg = "Your OutPoint is not later than InPoint!! Please set correct trim point."
 
 # Confirmation Message
 Trim_ConfirmMsg = "Trim video from current In/Out point?"

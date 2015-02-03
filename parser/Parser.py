@@ -16,7 +16,7 @@ class Parser(object):
     """ Parsing
     """
     FFMPEG_DURATION_PATTERN = re.compile("Duration: (\\d\\d):(\\d\\d):(\\d\\d)\\.(\\d\\d)")
-    FFPLAY_PLAYBACK_PATTERN = re.compile("^\s(.+) A-V: .+")
+    FFPLAY_PLAYBACK_PATTERN = re.compile("^(.+) A-V: .+")
 
     def __init__(self):
         super(Parser, self).__init__()

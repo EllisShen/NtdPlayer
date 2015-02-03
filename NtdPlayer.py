@@ -21,7 +21,7 @@ from queue.Queues import Queues
 logger = logging.getLogger(__name__)
 
 # global app version define here.
-appVersion = "0.0.1"
+appVersion = "0.2.0"
 
 # create root window and hide it
 root = Tk()
@@ -39,6 +39,13 @@ def appHandler():
         if app.process is not None and app.process.poll() is None:
             app.process.terminate()
             # app.process.kill()
+        try:
+            os.remove(os.path.join(app.tempDir, "pvIn.gif"))
+            os.remove(os.path.join(app.tempDir, "pvOut.gif"))
+            os.removedirs(app.tempDir)
+        except OSError:
+            pass
+
         root.destroy()
 
 
@@ -78,6 +85,15 @@ if __name__ == "__main__":
         top.mainloop()
 
     except (KeyboardInterrupt, SystemExit):
+        if app.process is not None and app.process.poll() is None:
+            app.process.terminate()
+            # app.process.kill()
+        try:
+            os.remove(os.path.join(app.tempDir, "pvIn.gif"))
+            os.remove(os.path.join(app.tempDir, "pvOut.gif"))
+            os.removedirs(app.tempDir)
+        except OSError:
+            pass
         root.destroy()
     except AttributeError:
         pass

@@ -12,15 +12,17 @@ import sys
 import threading
 import time
 import logging
-from Tkinter import Tk, Toplevel, StringVar, Label, Frame, PhotoImage
+from Tkinter import Tk, Toplevel, StringVar, Label, Frame, PhotoImage, Canvas
 import tkFileDialog
 import tkMessageBox
 import ttk
+import tempfile
 
 from Queue import Empty, Full
-from menu.appColor import gui_Dark, gui_White
+from menu.appColor import gui_Dark, gui_White, gui_pink
 from menu.appMsg import QuitApp_Question, ContainSpace_Error, Trim_ConfirmMsg, FileExtension_Error, FFmpeg_Preview_Error, \
-    FFPLAY_Still_Running
+    FFPLAY_Still_Running, Trim_TimingErrorMsg
+from menu.appProgressWindow import ProgressWindow
 from parser.Parser import Parser
 from tkDnD.tkdnd_wrapper import TkDND
 from clipInfo import ClipInfo
@@ -30,6 +32,8 @@ logger = logging.getLogger(__name__)
 VIDEO_EXTENTIOM_LIST = ['.mov', '.mpg', '.mpeg', '.mp4', '.avi']
 FFPLAY_WIDTH = "640"
 FFPLAY_HEIGHT = "360"
+CANVAS_WIDTH = 400
+CANVAS_HEIGHT = 10
 
 
 class Application(object):
@@ -40,6 +44,7 @@ class Application(object):
         self.queues = queues
         self.clipInfo = ClipInfo()
         self.process = None
+        self.tempDir = tempfile.mkdtemp()
 
         global top
         top = master
@@ -78,11 +83,11 @@ class Application(object):
             try:
                 ffmpegReturn = subprocess.check_call(
                     ['bin/ffmpeg', '-ss', ptsTime, '-y', '-i', filePath, '-vframes', '1', '-vf',
-                     'scale=-1:min(120\, iw)', 'pvIn.gif'])
+                     'scale=-1:min(120\, iw)', os.path.join(self.tempDir, 'pvIn.gif')])
                 if ffmpegReturn != 0:
                     tkMessageBox.showwarning("Error", FFmpeg_Preview_Error, icon=tkMessageBox.ERROR, parent=top)
                     return
-                pvIn_obj = PhotoImage(file='pvIn.gif')
+                pvIn_obj = PhotoImage(file=os.path.join(self.tempDir, 'pvIn.gif'))
                 if self.pvIn_Label is None:
                     self.pvInText.set(ptsTime + 's')
                     Label(self.sndLeftFrame, textvariable=self.pvInText, font=("Arial Bold", 14),
@@ -114,11 +119,11 @@ class Application(object):
             try:
                 ffmpegReturn = subprocess.check_call(
                     ['bin/ffmpeg', '-ss', ptsTime, '-y', '-i', filePath, '-vframes', '1', '-vf',
-                     'scale=-1:min(120\, iw)', 'pvOut.gif'])
+                     'scale=-1:min(120\, iw)', os.path.join(self.tempDir, 'pvOut.gif')])
                 if ffmpegReturn != 0:
                     tkMessageBox.showwarning("Error", FFmpeg_Preview_Error, icon=tkMessageBox.ERROR, parent=top)
                     return
-                pvOut_obj = PhotoImage(file='pvOut.gif')
+                pvOut_obj = PhotoImage(file=os.path.join(self.tempDir, 'pvOut.gif'))
                 if self.pvOut_Label is None:
                     self.pvOutText.set(ptsTime + 's')
                     Label(self.sndRightFrame, textvariable=self.pvOutText, font=("Arial Bold", 14),
@@ -142,30 +147,40 @@ class Application(object):
                 logger.error("ffmpeg render OutPoint frame failed! ptsTime = %s" % ptsTime)
             pass
 
-        def previewVideo():
-            pass
-
         def trimVideo():
             answer = tkMessageBox.askyesno("Confirm?", Trim_ConfirmMsg, icon=tkMessageBox.QUESTION, parent=top)
             if answer:
                 inPoint = float(self.clipInfo.getInPoint())
                 outPoint = float(self.clipInfo.getOutPoint())
+
+                # check if outPoint is later than inPoint
+                if outPoint < inPoint:
+                    tkMessageBox.showerror("Error!", Trim_TimingErrorMsg, icon=tkMessageBox.ERROR, parent=top)
+                    return
+
                 logger.info("Confirmed to trim video from In = %f to Out = %f", inPoint, outPoint)
                 home = os.path.expanduser("~")
-                self.clipProgress.start()
-                videoClip = tkFileDialog.asksaveasfilename(
+                savePath = tkFileDialog.asksaveasfilename(
                     title="Set filename and save location",
                     defaultextension=".mov",
                     initialdir=os.path.join(home, "Desktop"),
                     parent=top
                 )
-                logger.info("File saved path = %s" % videoClip)
-                ffmpegReturn = subprocess.check_call(
-                    ['bin/ffmpeg', '-ss', str(inPoint), '-y', '-i', self.clipInfo.getFilePath(), '-t', str(outPoint-inPoint),
-                     '-c', 'copy', videoClip])
-                if ffmpegReturn == 0:
-                    self.clipProgress.stop()
-                    tkMessageBox.showinfo("Info", "Trim Video Successfully!", icon=tkMessageBox.INFO, parent=top)
+                logger.info("File saved path = %s" % savePath)
+                if savePath is not "":
+                    pWin = ProgressWindow(top, "Attention", "Background Processing...")
+                    pWin.geometry("+%d+%d" % (top.winfo_rootx() + 50, top.winfo_rooty() + 50))
+                    pWin.after(1000, lambda: ffmpegTrim(pWin, inPoint, outPoint, savePath))
+            pass
+
+        def ffmpegTrim(progressBar, inPoint, outPoint, savePath):
+            ffmpegReturn = subprocess.check_call(
+                ['bin/ffmpeg', '-ss', str(inPoint), '-y', '-i', self.clipInfo.getFilePath(), '-t', str(outPoint-inPoint),
+                 '-c', 'copy', savePath])
+            if ffmpegReturn == 0:
+                progressBar.stopProgress()
+                progressBar.closeWindow()
+                tkMessageBox.showinfo("Info", "Trim Video Successfully!", icon=tkMessageBox.INFO, parent=top)
             pass
 
         # init custom Style
@@ -228,10 +243,15 @@ class Application(object):
         thirdMiddleFrame.pack(side=LEFT)
         thirdRightFrame = Frame(thirdFrame, bg=gui_Dark, padx=15, pady=16)
         thirdRightFrame.pack(side=LEFT)
-        self.clipProgress = ttk.Progressbar(thirdMiddleFrame,  orient=HORIZONTAL, length=320, mode='indeterminate')
-        self.clipProgress.pack()
-        ttk.Button(thirdRightFrame, text="Preview", command=lambda: previewVideo()).pack()
-        Label(thirdRightFrame, text="", font=("Arial", 6), fg=gui_White, bg=gui_Dark, pady=0).pack()
+
+        # self.clipProgress = ttk.Progressbar(thirdMiddleFrame,  orient=HORIZONTAL, length=320, mode='indeterminate')
+        # self.clipProgress.pack()
+        self.w = Canvas(thirdMiddleFrame, width=CANVAS_WIDTH, height=CANVAS_HEIGHT, bg=gui_Dark, bd=0)
+        self.w.pack()
+        self.pin = self.w.create_rectangle(2, 0, 6, 15, fill=gui_pink, outline=gui_Dark)
+        self.pinCurX = 2
+        # print "coords = " + str(self.w.coords(self.pin))
+
         ttk.Button(thirdRightFrame, text="Trim", command=lambda: trimVideo()).pack()
         # register top as Tkdnd drag zone
         self.dnd.bindtarget(mainFrame, self.videoHandler, 'text/uri-list')
@@ -241,7 +261,9 @@ class Application(object):
         # get file path and file extension
         logging.info('video = %s' % event.data)
         path = event.data
-        path = path.translate(None, '{}')  # remove {} from path
+        path = path.replace("{", "")
+        path = path.replace("}", "")
+        #path = path.translate(None, '{}')  # remove {} from path
         filePath = os.path.abspath(path)
         fileExtension = os.path.splitext(filePath)[1]
         logging.debug('filePath = %s', filePath)
@@ -273,11 +295,11 @@ class Application(object):
         line = ''
         durationInspected = False
         while process.poll() is None:
-            # line = process.stderr.readline()
             out = process.stderr.read(1)
             if out != '':
                 if (out == '\n') or (out == '\r'):
                     logger.debug(line + '\n')
+                    # print line
                     # Inspect duration
                     if not durationInspected:
                         m = Parser.FFMPEG_DURATION_PATTERN.search(line)
@@ -341,6 +363,11 @@ class Application(object):
                         second = '-' + second
                     second = _checkDigits(second)  # make it as double digits
                     self.labelText.set(str(hour) + ':' + str(minute) + ':' + str(second) + '.' + decimal)
+
+                    # update video indicator location
+                    pinLocation = int((float(ptsTime) / float(self.clipInfo.getLength())) * CANVAS_WIDTH)
+                    if pinLocation > 0:
+                        self.w.coords(self.pin, (pinLocation, 0, pinLocation + 4, 15))
         except Empty:
             pass
 
@@ -371,7 +398,7 @@ class Application(object):
 def appHandler():
     if tkMessageBox.askokcancel("Quit?", QuitApp_Question,
                                 icon=tkMessageBox.QUESTION, default=tkMessageBox.CANCEL, parent=top):
-
+        os.removedirs(app.tempDir)
         root.destroy()
 
 
