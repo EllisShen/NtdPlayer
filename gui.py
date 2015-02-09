@@ -5,7 +5,7 @@ GUI mainloop
 
 Created by Ellis Shen, New York.
 """
-from Tkconstants import LEFT, HORIZONTAL
+from Tkconstants import LEFT
 import os
 import subprocess
 import sys
@@ -20,8 +20,8 @@ import tempfile
 
 from Queue import Empty, Full
 from menu.appColor import gui_Dark, gui_White, gui_pink
-from menu.appMsg import QuitApp_Question, ContainSpace_Error, Trim_ConfirmMsg, FileExtension_Error, FFmpeg_Preview_Error, \
-    FFPLAY_Still_Running, Trim_TimingErrorMsg
+from menu.appMsg import QuitApp_Question, Trim_ConfirmMsg, FileExtension_Error, \
+    FFmpeg_Preview_Error, Trim_TimingErrorMsg
 from menu.appProgressWindow import ProgressWindow
 from parser.Parser import Parser
 from tkDnD.tkdnd_wrapper import TkDND
@@ -65,8 +65,9 @@ class Application(object):
 
         # def renderPreviewImage(ptsTime, filePath, outPut):
         # try:
-        #         subprocess.check_call(
-        #             ['ffmpeg', '-y', '-i', filePath, '-ss', ptsTime, '-vframes', '1', '-vf', 'scale=-1:min(80\, iw)', outPut])
+        # subprocess.check_call(
+        #             ['ffmpeg', '-y', '-i', filePath, '-ss', ptsTime, '-vframes', '1', '-vf', 'scale=-1:min(80\,
+        # iw)', outPut])
         #         pvIn_obj = PhotoImage(file=outPut)
         #         pvIn_Label = ttk.Label(self.sndLeftFrame, image=pvIn_obj)
         #         pvIn_Label.image = pvIn_obj
@@ -175,12 +176,17 @@ class Application(object):
 
         def ffmpegTrim(progressBar, inPoint, outPoint, savePath):
             ffmpegReturn = subprocess.check_call(
-                ['bin/ffmpeg', '-ss', str(inPoint), '-y', '-i', self.clipInfo.getFilePath(), '-t', str(outPoint-inPoint),
+                ['bin/ffmpeg', '-ss', str(inPoint), '-y', '-i', self.clipInfo.getFilePath(), '-t',
+                 str(outPoint - inPoint),
                  '-c', 'copy', savePath])
             if ffmpegReturn == 0:
                 progressBar.stopProgress()
                 progressBar.closeWindow()
                 tkMessageBox.showinfo("Info", "Trim Video Successfully!", icon=tkMessageBox.INFO, parent=top)
+            else:
+                logger.error("FFmpeg trim video fails! Error code = %d", ffmpegReturn)
+                progressBar.closeWindow()
+                tkMessageBox.showerror("Error", "Trim Video Failed!!", icon=tkMessageBox.ERROR, parent=top)
             pass
 
         # init custom Style
@@ -263,7 +269,7 @@ class Application(object):
         path = event.data
         path = path.replace("{", "")
         path = path.replace("}", "")
-        #path = path.translate(None, '{}')  # remove {} from path
+        # path = path.translate(None, '{}')  # remove {} from path
         filePath = os.path.abspath(path)
         fileExtension = os.path.splitext(filePath)[1]
         logging.debug('filePath = %s', filePath)
@@ -282,11 +288,14 @@ class Application(object):
                 # retrieve queue data
                 self.updateGui()
             elif self.process.poll() is None:
-                # last process is not terminated yet
-                tkMessageBox.showwarning("Warning", FFPLAY_Still_Running, icon=tkMessageBox.ERROR, parent=top)
-                pass
-            else:# last process is terminated
+                # last process is not terminated yet, terminate it!
+                self.process.terminate()
                 self.process = None
+                self.videoHandler(event)
+                pass
+            else:  # last process is terminated, clear process and re-enter the procedure.
+                self.process = None
+                self.videoHandler(event)
                 pass
         else:
             tkMessageBox.showwarning("Error", FileExtension_Error, icon=tkMessageBox.ERROR, parent=top)

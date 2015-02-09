@@ -21,7 +21,7 @@ from queue.Queues import Queues
 logger = logging.getLogger(__name__)
 
 # global app version define here.
-appVersion = "0.2.0"
+appVersion = "0.3.0"
 
 # create root window and hide it
 root = Tk()
